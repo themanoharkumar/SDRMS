@@ -1,0 +1,18 @@
+[META]
+version=1
+[DISASTERS]
+Flood|East Riverside|8|1200|12
+Earthquake|Downtown District|9|3500|25
+[EMERGENCY]
+2001|Ambulance|Block 4|ICU patient trapped
+2002|Food|Shelter A|200 families
+[PRIORITY]
+6001|10|Medical|ICU patient - oxygen critical
+6002|8|Child rescue|School wing collapse
+[SHELTERS]
+Central Relief Hall|City Center|500|120
+Sports Arena Shelter|West End|800|310
+[HISTORY]
+2026-05-01T08:00:00|Dispatch|Medical team to District A|3 units deployed
+2026-05-01T09:30:00|Supply|Food drop Zone B|Knapsack plan executed
+[END]

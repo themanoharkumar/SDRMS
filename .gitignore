@@ -1,0 +1,65 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# SmartDisasterSystem — Git Ignore Configuration
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Compile / Build directories
+/[Bb]uild/
+/[Bb]uild-*/
+/out/
+/bin/
+/lib/
+
+# Qt Creator settings & configurations
+*.user
+*.user.*
+*.cmake.user
+.qtcreator/
+.qt/
+.rcc/
+*autogen*
+*timestamp*
+CMakeLists.txt.user
+
+# SQLite database file backups / local runtime files
+*.db
+*.sqlite
+/SDRMS_Data/
+/build-release/
+
+# Temporary / OS generated files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+
+# Version Control / IDE internal files
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.vcxproj
+*.filters
+*.projitems
+*.shproj
+
+# Local Flat File save backups
+/sdrms_backup.dat
+/sdrms_backup_v2.dat
+
+# MSVC / Compiler specific logs
+*.log
+*.ilk
+*.pdb
+*.obj
+*.exe
+*.o
+*.a
+*.lib
+*.so
+*.dll
+*.dylib
+/ipch/
+*.tlog
+*.lastbuildstate
