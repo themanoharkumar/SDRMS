@@ -23,6 +23,23 @@ This application is engineered as a **resume-ready software portfolio highlight*
 - **Split-Screen Authentication:** Modern login interface featuring a brand introduction pane highlighting the project's technology stack next to an input card.
 - **Modern Clean Workspace:** Fully custom stylesheet inspired by modern web dashboard design systems (solid left-accent active indicators, flat tables, clean custom scrollbars).
 
+### Screenshots
+
+#### Secure Login Panel
+![Login Screen](screenshots/login.png)
+
+#### Live Dashboard Overview
+![Dashboard Overview](screenshots/dashboard.png)
+
+#### Disaster Registration & Tracking
+![Disaster Registration](screenshots/disaster%20registration.png)
+
+#### Shelter Capacity & Bed Utilization
+![Shelter Management](screenshots/shelter%20management.png)
+
+#### Admin User Management Control
+![Admin User Control](screenshots/admin%20panel.png)
+
 ---
 
 ## ✨ Features & Functionality
