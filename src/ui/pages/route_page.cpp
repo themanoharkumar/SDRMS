@@ -4,6 +4,7 @@
 #include "appdata.h"
 #include "graph.h"
 #include "tsp.h"
+#include "graph_widget.h"
 #include <QComboBox>
 #include <QGridLayout>
 #include <QGroupBox>
@@ -22,6 +23,9 @@ RoutePage::RoutePage(ApplicationModel *model, QWidget *parent)
     auto *root = pageScrollSetup(this);
     addSdrmsPanelHeader(root, 7, tr("Route optimization (TSP + Dijkstra)"),
                         tr("Shortest safe paths on the road graph; exact TSP for multi-stop convoy planning."));
+
+    QHBoxLayout *splitLayout = new QHBoxLayout;
+    QVBoxLayout *leftCol = new QVBoxLayout;
 
     auto *g1 = new QGroupBox(tr("Shortest safe path (Dijkstra)"));
     auto *lay1 = new QGridLayout(g1);
@@ -53,16 +57,20 @@ RoutePage::RoutePage(ApplicationModel *model, QWidget *parent)
     connect(b3, &QPushButton::clicked, this, &RoutePage::runTsp);
     lay3->addWidget(b3);
 
-    auto *row = new QHBoxLayout;
-    row->addWidget(g1, 1);
-    row->addWidget(g2, 1);
-    root->addLayout(row);
-    root->addWidget(g3);
+    leftCol->addWidget(g1);
+    leftCol->addWidget(g2);
+    leftCol->addWidget(g3);
 
     output_ = new QTextEdit;
     output_->setReadOnly(true);
-    output_->setMinimumHeight(180);
-    root->addWidget(output_, 1);
+    output_->setMinimumHeight(150);
+    leftCol->addWidget(output_);
+
+    graphWidget_ = new RoadGraphWidget(model_, this);
+
+    splitLayout->addLayout(leftCol, 2);
+    splitLayout->addWidget(graphWidget_, 3);
+    root->addLayout(splitLayout);
 
     refresh();
 }
@@ -86,6 +94,10 @@ void RoutePage::reloadCombos()
 void RoutePage::refresh()
 {
     reloadCombos();
+    if (graphWidget_) {
+        graphWidget_->clearHighlight();
+        graphWidget_->update();
+    }
 }
 
 void RoutePage::runDijkstra()
@@ -99,10 +111,15 @@ void RoutePage::runDijkstra()
     auto [dist, parent] = model_->roadGraph.dijkstra(s);
     if (dist[static_cast<std::size_t>(t)] >= std::numeric_limits<double>::infinity()) {
         output_->setPlainText(tr("No path — road network may be disconnected or blocked."));
+        if (graphWidget_) graphWidget_->clearHighlight();
         QMessageBox::warning(this, tr("Routing"), tr("Target unreachable under current blockages."));
         return;
     }
     std::vector<int> path = ReliefRoadGraph::pathFromParent(parent, t);
+    
+    // Highlight route in vector map
+    if (graphWidget_) graphWidget_->setHighlightedPath(path);
+
     QString line;
     line += tr("Distance: %1 km\nPath: ").arg(dist[static_cast<std::size_t>(t)], 0, 'f', 2);
     for (std::size_t i = 0; i < path.size(); ++i) {
@@ -127,6 +144,12 @@ void RoutePage::toggleBlock()
         QMessageBox::warning(this, tr("Roads"), tr("No direct road between those locations."));
         return;
     }
+    
+    if (graphWidget_) {
+        graphWidget_->clearHighlight();
+        graphWidget_->update();
+    }
+
     output_->append(tr("Toggled blockage on selected road — re-run routing to evaluate impact."));
 }
 
@@ -138,9 +161,14 @@ void RoutePage::runTsp()
     }
     TspResult r = solveTspExact(model_->tspDistMatrix);
     if (!r.ok) {
+        if (graphWidget_) graphWidget_->clearHighlight();
         QMessageBox::warning(this, tr("TSP"), tr("Unable to solve TSP for current matrix."));
         return;
     }
+
+    // Show TSP tour loop in visualizer
+    if (graphWidget_) graphWidget_->setHighlightedPath(r.tour);
+
     QString txt;
     txt += tr("Optimal tour length: %1\nOrder: ").arg(r.tourCost, 0, 'f', 2);
     for (std::size_t i = 0; i < r.tour.size(); ++i) {

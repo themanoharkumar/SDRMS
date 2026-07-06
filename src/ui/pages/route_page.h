@@ -7,6 +7,8 @@ class ApplicationModel;
 class QComboBox;
 class QTextEdit;
 
+class RoadGraphWidget;
+
 class RoutePage : public QWidget
 {
     Q_OBJECT
@@ -28,6 +30,7 @@ private:
     QComboBox *blockA_ = nullptr;
     QComboBox *blockB_ = nullptr;
     QTextEdit *output_ = nullptr;
+    RoadGraphWidget *graphWidget_ = nullptr;
 };
 
 #endif // ROUTE_PAGE_H

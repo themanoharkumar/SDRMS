@@ -67,6 +67,8 @@ set(PROJECT_SOURCES
     src/ui/pages/users_page.h
     src/ui/pages/settings_page.cpp
     src/ui/pages/settings_page.h
+    src/ui/pages/graph_widget.cpp
+    src/ui/pages/graph_widget.h
 )
 
 qt_add_executable(SmartDisasterRelief
