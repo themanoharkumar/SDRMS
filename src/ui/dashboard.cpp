@@ -63,6 +63,7 @@ Dashboard::Dashboard(QWidget *parent)
 
     refreshAllPages();
     onStackChanged(0);
+    loadData(); // Auto-load last saved workspace state from SQLite database on boot
 
     // Connect DB signals
     connect(Database::instance(), &Database::notificationAdded,
@@ -488,12 +489,9 @@ void Dashboard::saveData()
 
 void Dashboard::loadData()
 {
-    if (!QFile::exists(fileManager_.filePath())) {
-        statusBar()->showMessage(tr("No save file found."), 3000); return;
-    }
     if (fileManager_.loadAll(model_)) {
         refreshAllPages();
-        statusBar()->showMessage(tr("Data loaded."), 3000);
+        statusBar()->showMessage(tr("Workspace loaded from database."), 3000);
     }
 }
 

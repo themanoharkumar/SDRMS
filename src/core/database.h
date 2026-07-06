@@ -38,6 +38,8 @@ struct MessageRecord {
     QString createdAt;
 };
 
+class ApplicationModel;
+
 // ── Database singleton ────────────────────────────────────────────────────────
 class Database : public QObject
 {
@@ -48,6 +50,10 @@ public:
     bool open(const QString &dbPath);
     void close();
     bool isOpen() const;
+
+    // ── Workspace State Persistence ───────────────────────────────────────────
+    bool saveModel(const ApplicationModel &model);
+    bool loadModel(ApplicationModel &model);
 
     // ── Auth ──────────────────────────────────────────────────────────────────
     bool   signUp(const QString &username, const QString &password,

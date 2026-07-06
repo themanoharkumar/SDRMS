@@ -1,4 +1,5 @@
 #include "database.h"
+#include "appdata.h"
 
 #include <QCryptographicHash>
 #include <QSqlError>
@@ -78,7 +79,7 @@ bool Database::createTables()
     }
 
     // notifications
-    q.exec(QStringLiteral(
+    if (!q.exec(QStringLiteral(
         "CREATE TABLE IF NOT EXISTS notifications ("
         "  id         INTEGER PRIMARY KEY AUTOINCREMENT,"
         "  title      TEXT    NOT NULL,"
@@ -86,10 +87,13 @@ bool Database::createTables()
         "  type       TEXT    DEFAULT 'system',"
         "  is_read    INTEGER DEFAULT 0,"
         "  created_at TEXT    DEFAULT (datetime('now','localtime'))"
-        ");"));
+        ");"))) {
+        qWarning() << "notifications table error:" << q.lastError().text();
+        return false;
+    }
 
     // messages
-    q.exec(QStringLiteral(
+    if (!q.exec(QStringLiteral(
         "CREATE TABLE IF NOT EXISTS messages ("
         "  id         INTEGER PRIMARY KEY AUTOINCREMENT,"
         "  sender     TEXT    NOT NULL,"
@@ -97,7 +101,76 @@ bool Database::createTables()
         "  body       TEXT    DEFAULT '',"
         "  is_read    INTEGER DEFAULT 0,"
         "  created_at TEXT    DEFAULT (datetime('now','localtime'))"
-        ");"));
+        ");"))) {
+        qWarning() << "messages table error:" << q.lastError().text();
+        return false;
+    }
+
+    // disasters
+    if (!q.exec(QStringLiteral(
+            "CREATE TABLE IF NOT EXISTS disasters ("
+            "  id              INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "  disaster_type   TEXT    NOT NULL,"
+            "  location        TEXT    NOT NULL,"
+            "  severity        INTEGER NOT NULL,"
+            "  affected_people INTEGER NOT NULL,"
+            "  teams_needed    INTEGER NOT NULL,"
+            "  status          TEXT    NOT NULL,"
+            "  timestamp       TEXT    NOT NULL"
+            ");"))) {
+        qWarning() << "disasters table error:" << q.lastError().text();
+        return false;
+    }
+
+    // emergency_requests
+    if (!q.exec(QStringLiteral(
+            "CREATE TABLE IF NOT EXISTS emergency_requests ("
+            "  id             INTEGER PRIMARY KEY,"
+            "  request_type   TEXT    NOT NULL,"
+            "  location       TEXT    NOT NULL,"
+            "  notes          TEXT"
+            ");"))) {
+        qWarning() << "emergency_requests table error:" << q.lastError().text();
+        return false;
+    }
+
+    // priority_tasks
+    if (!q.exec(QStringLiteral(
+            "CREATE TABLE IF NOT EXISTS priority_tasks ("
+            "  id          INTEGER PRIMARY KEY,"
+            "  severity    INTEGER NOT NULL,"
+            "  category    TEXT    NOT NULL,"
+            "  description TEXT"
+            ");"))) {
+        qWarning() << "priority_tasks table error:" << q.lastError().text();
+        return false;
+    }
+
+    // shelters
+    if (!q.exec(QStringLiteral(
+            "CREATE TABLE IF NOT EXISTS shelters ("
+            "  id       INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "  name     TEXT    UNIQUE NOT NULL,"
+            "  location TEXT    NOT NULL,"
+            "  capacity INTEGER NOT NULL,"
+            "  occupied INTEGER NOT NULL"
+            ");"))) {
+        qWarning() << "shelters table error:" << q.lastError().text();
+        return false;
+    }
+
+    // operation_history
+    if (!q.exec(QStringLiteral(
+            "CREATE TABLE IF NOT EXISTS operation_history ("
+            "  id             INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "  timestamp      TEXT    NOT NULL,"
+            "  operation_type TEXT    NOT NULL,"
+            "  summary        TEXT    NOT NULL,"
+            "  detail         TEXT"
+            ");"))) {
+        qWarning() << "operation_history table error:" << q.lastError().text();
+        return false;
+    }
 
     return true;
 }
@@ -324,4 +397,180 @@ void Database::markMsgRead(int id)
     q.prepare(QStringLiteral("UPDATE messages SET is_read=1 WHERE id=:id;"));
     q.bindValue(QStringLiteral(":id"), id);
     q.exec();
+}
+
+// ── Workspace State Persistence ───────────────────────────────────────────
+bool Database::saveModel(const ApplicationModel &model)
+{
+    if (!isOpen())
+        return false;
+
+    db_.transaction();
+
+    QSqlQuery q(db_);
+    
+    // Clear old data
+    q.exec(QStringLiteral("DELETE FROM disasters;"));
+    q.exec(QStringLiteral("DELETE FROM emergency_requests;"));
+    q.exec(QStringLiteral("DELETE FROM priority_tasks;"));
+    q.exec(QStringLiteral("DELETE FROM shelters;"));
+    q.exec(QStringLiteral("DELETE FROM operation_history;"));
+
+    // Save disasters
+    q.prepare(QStringLiteral(
+        "INSERT INTO disasters (disaster_type, location, severity, affected_people, teams_needed, status, timestamp) "
+        "VALUES (:type, :loc, :sev, :aff, :teams, :stat, :time);"));
+    for (const auto &d : model.disasters.records()) {
+        q.bindValue(QStringLiteral(":type"), QString::fromStdString(d.disasterType));
+        q.bindValue(QStringLiteral(":loc"), QString::fromStdString(d.location));
+        q.bindValue(QStringLiteral(":sev"), d.severity);
+        q.bindValue(QStringLiteral(":aff"), d.affectedPeople);
+        q.bindValue(QStringLiteral(":teams"), d.teamsNeeded);
+        q.bindValue(QStringLiteral(":stat"), QString::fromStdString(d.status));
+        q.bindValue(QStringLiteral(":time"), QString::fromStdString(d.timestamp));
+        q.exec();
+    }
+
+    // Save emergency requests
+    q.prepare(QStringLiteral(
+        "INSERT INTO emergency_requests (id, request_type, location, notes) "
+        "VALUES (:id, :type, :loc, :notes);"));
+    for (const auto &e : model.emergencyQueue.pendingSnapshot()) {
+        q.bindValue(QStringLiteral(":id"), static_cast<qlonglong>(e.id));
+        q.bindValue(QStringLiteral(":type"), QString::fromStdString(e.requestType));
+        q.bindValue(QStringLiteral(":loc"), QString::fromStdString(e.location));
+        q.bindValue(QStringLiteral(":notes"), QString::fromStdString(e.notes));
+        q.exec();
+    }
+
+    // Save priority tasks
+    q.prepare(QStringLiteral(
+        "INSERT INTO priority_tasks (id, severity, category, description) "
+        "VALUES (:id, :sev, :cat, :desc);"));
+    for (const auto &p : model.priorityHeap.snapshotLevels()) {
+        q.bindValue(QStringLiteral(":id"), static_cast<qlonglong>(p.id));
+        q.bindValue(QStringLiteral(":sev"), p.severity);
+        q.bindValue(QStringLiteral(":cat"), QString::fromStdString(p.category));
+        q.bindValue(QStringLiteral(":desc"), QString::fromStdString(p.description));
+        q.exec();
+    }
+
+    // Save shelters
+    q.prepare(QStringLiteral(
+        "INSERT INTO shelters (name, location, capacity, occupied) "
+        "VALUES (:name, :loc, :cap, :occ);"));
+    for (const auto &s : model.shelters.all()) {
+        q.bindValue(QStringLiteral(":name"), QString::fromStdString(s.name));
+        q.bindValue(QStringLiteral(":loc"), QString::fromStdString(s.location));
+        q.bindValue(QStringLiteral(":cap"), s.capacity);
+        q.bindValue(QStringLiteral(":occ"), s.occupied);
+        q.exec();
+    }
+
+    // Save history
+    q.prepare(QStringLiteral(
+        "INSERT INTO operation_history (timestamp, operation_type, summary, detail) "
+        "VALUES (:time, :type, :sum, :det);"));
+    for (const auto &h : model.history.toVectorOldestFirst()) {
+        q.bindValue(QStringLiteral(":time"), QString::fromStdString(h.timestamp));
+        q.bindValue(QStringLiteral(":type"), QString::fromStdString(h.operationType));
+        q.bindValue(QStringLiteral(":sum"), QString::fromStdString(h.summary));
+        q.bindValue(QStringLiteral(":det"), QString::fromStdString(h.detail));
+        q.exec();
+    }
+
+    return db_.commit();
+}
+
+bool Database::loadModel(ApplicationModel &model)
+{
+    if (!isOpen())
+        return false;
+
+    QSqlQuery q(db_);
+
+    // Check if tables are empty
+    q.exec(QStringLiteral("SELECT COUNT(*) FROM disasters;"));
+    int dCount = q.next() ? q.value(0).toInt() : 0;
+    q.exec(QStringLiteral("SELECT COUNT(*) FROM shelters;"));
+    int sCount = q.next() ? q.value(0).toInt() : 0;
+
+    if (dCount == 0 && sCount == 0) {
+        // Fresh database. Keep constructor-populated sample data.
+        return true;
+    }
+
+    model.disasters.clear();
+    model.emergencyQueue.clear();
+    model.priorityHeap.clear();
+    model.shelters.clear();
+    model.history.clear();
+    model.resetIds();
+
+    // Load disasters
+    if (q.exec(QStringLiteral("SELECT disaster_type, location, severity, affected_people, teams_needed, status, timestamp FROM disasters;"))) {
+        while (q.next()) {
+            DisasterRecord d;
+            d.disasterType = q.value(0).toString().toStdString();
+            d.location = q.value(1).toString().toStdString();
+            d.severity = q.value(2).toInt();
+            d.affectedPeople = q.value(3).toInt();
+            d.teamsNeeded = q.value(4).toInt();
+            d.status = q.value(5).toString().toStdString();
+            d.timestamp = q.value(6).toString().toStdString();
+            model.disasters.registerDisaster(d);
+        }
+    }
+
+    // Load emergency requests
+    if (q.exec(QStringLiteral("SELECT id, request_type, location, notes FROM emergency_requests;"))) {
+        while (q.next()) {
+            EmergencyRequest e;
+            e.id = q.value(0).toLongLong();
+            e.requestType = q.value(1).toString().toStdString();
+            e.location = q.value(2).toString().toStdString();
+            e.notes = q.value(3).toString().toStdString();
+            model.emergencyQueue.enqueue(e);
+        }
+    }
+
+    // Load priority tasks
+    if (q.exec(QStringLiteral("SELECT id, severity, category, description FROM priority_tasks;"))) {
+        while (q.next()) {
+            PriorityTask p;
+            p.id = q.value(0).toLongLong();
+            p.severity = q.value(1).toInt();
+            p.category = q.value(2).toString().toStdString();
+            p.description = q.value(3).toString().toStdString();
+            model.priorityHeap.push(p);
+        }
+    }
+
+    // Load shelters
+    if (q.exec(QStringLiteral("SELECT name, location, capacity, occupied FROM shelters;"))) {
+        while (q.next()) {
+            ShelterRecord s;
+            s.name = q.value(0).toString().toStdString();
+            s.location = q.value(1).toString().toStdString();
+            s.capacity = q.value(2).toInt();
+            s.occupied = q.value(3).toInt();
+            model.shelters.addShelter(s);
+        }
+    }
+
+    // Load history
+    if (q.exec(QStringLiteral("SELECT timestamp, operation_type, summary, detail FROM operation_history ORDER BY id ASC;"))) {
+        while (q.next()) {
+            HistoryEntry h;
+            h.timestamp = q.value(0).toString().toStdString();
+            h.operationType = q.value(1).toString().toStdString();
+            h.summary = q.value(2).toString().toStdString();
+            h.detail = q.value(3).toString().toStdString();
+            model.history.push(h);
+        }
+    }
+
+    // Reseed generator counters
+    model.reseedCountersFromState();
+    return true;
 }
