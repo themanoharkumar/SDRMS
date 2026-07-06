@@ -40,6 +40,16 @@ public:
     /** Flip blocked flag if an undirected edge exists; returns false if edge missing. */
     bool toggleEdgeBlock(int u, int v);
 
+    struct EdgeInfo
+    {
+        int u;
+        int v;
+        double weight;
+        bool blocked;
+    };
+    std::vector<EdgeInfo> allEdges() const;
+    void clear();
+
 private:
     struct Edge
     {

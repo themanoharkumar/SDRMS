@@ -192,3 +192,22 @@ std::string ReliefRoadGraph::nodeName(int id) const
         return {};
     return names_[id];
 }
+
+std::vector<ReliefRoadGraph::EdgeInfo> ReliefRoadGraph::allEdges() const
+{
+    std::vector<EdgeInfo> out;
+    for (int u = 0; u < nodeCount(); ++u) {
+        for (const auto &e : adj_[u]) {
+            if (u < e.to) {
+                out.push_back({u, e.to, e.w, e.blocked});
+            }
+        }
+    }
+    return out;
+}
+
+void ReliefRoadGraph::clear()
+{
+    names_.clear();
+    adj_.clear();
+}

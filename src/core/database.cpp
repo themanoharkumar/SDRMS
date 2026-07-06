@@ -172,6 +172,29 @@ bool Database::createTables()
         return false;
     }
 
+    // graph_nodes
+    if (!q.exec(QStringLiteral(
+            "CREATE TABLE IF NOT EXISTS graph_nodes ("
+            "  id    INTEGER PRIMARY KEY,"
+            "  name  TEXT    UNIQUE NOT NULL"
+            ");"))) {
+        qWarning() << "graph_nodes table error:" << q.lastError().text();
+        return false;
+    }
+
+    // graph_edges
+    if (!q.exec(QStringLiteral(
+            "CREATE TABLE IF NOT EXISTS graph_edges ("
+            "  u        INTEGER NOT NULL,"
+            "  v        INTEGER NOT NULL,"
+            "  weight   REAL    NOT NULL,"
+            "  blocked  INTEGER DEFAULT 0,"
+            "  PRIMARY KEY(u, v)"
+            ");"))) {
+        qWarning() << "graph_edges table error:" << q.lastError().text();
+        return false;
+    }
+
     return true;
 }
 
@@ -479,6 +502,26 @@ bool Database::saveModel(const ApplicationModel &model)
         q.exec();
     }
 
+    // Save graph nodes
+    q.exec(QStringLiteral("DELETE FROM graph_nodes;"));
+    q.prepare(QStringLiteral("INSERT INTO graph_nodes (id, name) VALUES (:id, :name);"));
+    for (int i = 0; i < model.roadGraph.nodeCount(); ++i) {
+        q.bindValue(QStringLiteral(":id"), i);
+        q.bindValue(QStringLiteral(":name"), QString::fromStdString(model.roadGraph.nodeName(i)));
+        q.exec();
+    }
+
+    // Save graph edges
+    q.exec(QStringLiteral("DELETE FROM graph_edges;"));
+    q.prepare(QStringLiteral("INSERT OR IGNORE INTO graph_edges (u, v, weight, blocked) VALUES (:u, :v, :w, :b);"));
+    for (const auto &edge : model.roadGraph.allEdges()) {
+        q.bindValue(QStringLiteral(":u"), edge.u);
+        q.bindValue(QStringLiteral(":v"), edge.v);
+        q.bindValue(QStringLiteral(":w"), edge.weight);
+        q.bindValue(QStringLiteral(":b"), edge.blocked ? 1 : 0);
+        q.exec();
+    }
+
     return db_.commit();
 }
 
@@ -567,6 +610,32 @@ bool Database::loadModel(ApplicationModel &model)
             h.summary = q.value(2).toString().toStdString();
             h.detail = q.value(3).toString().toStdString();
             model.history.push(h);
+        }
+    }
+
+    // Load graph nodes and edges
+    q.exec(QStringLiteral("SELECT COUNT(*) FROM graph_nodes;"));
+    int nodeCount = q.next() ? q.value(0).toInt() : 0;
+    if (nodeCount > 0) {
+        model.roadGraph.clear();
+
+        // Load graph nodes
+        if (q.exec(QStringLiteral("SELECT id, name FROM graph_nodes ORDER BY id ASC;"))) {
+            while (q.next()) {
+                std::string name = q.value(1).toString().toStdString();
+                model.roadGraph.addNode(name);
+            }
+        }
+
+        // Load graph edges
+        if (q.exec(QStringLiteral("SELECT u, v, weight, blocked FROM graph_edges;"))) {
+            while (q.next()) {
+                int u = q.value(0).toInt();
+                int v = q.value(1).toInt();
+                double w = q.value(2).toDouble();
+                bool b = q.value(3).toBool();
+                model.roadGraph.addEdge(u, v, w, b);
+            }
         }
     }
 
